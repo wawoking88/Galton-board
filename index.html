@@ -5,7 +5,7 @@
 <title>ガルトンボード</title>
 <style>
 body{margin:0;overflow:hidden;background:#111;color:white;font-family:sans-serif;}
-#ui{position:fixed;top:10px;left:10px;background:rgba(0,0,0,.7);padding:10px;border-radius:10px;z-index:10;width:240px}
+#ui{position:fixed;top:10px;left:10px;background:rgba(0,0,0,.72);padding:10px;border-radius:10px;z-index:10;width:250px}
 button{padding:8px;margin:3px}
 .bar{display:inline-block;height:10px;background:white;margin-left:5px}
 </style>
@@ -15,6 +15,7 @@ button{padding:8px;margin:3px}
   <h3>ガルトンボード</h3>
   <button id="drop1">1個落とす</button>
   <button id="drop100">100個落とす</button>
+  <button id="drop1000">1000個落とす</button>
   <button id="reset">リセット</button>
   <div id="count">合計: 0</div>
   <div id="bins"></div>
@@ -59,12 +60,19 @@ scene.add(light);
 const world = new RAPIER.World({x:0,y:-6.2,z:0});
 
 const balls = [];
+const stackedMeshes = [];
+
 let total = 0;
 
 const binCount = 11;
 const binCounts = Array(binCount).fill(0);
+const stacks = Array(binCount).fill(0);
+
 const binWidth = 1.15;
 const leftStart = -binWidth * binCount / 2;
+
+const ballRadius = 0.13;
+const stackGap = 0.27;
 
 function addBox(x,y,z,sx,sy,sz,color=0x888888,transparent=false){
   const mat = new THREE.MeshStandardMaterial({
@@ -92,13 +100,14 @@ function addBox(x,y,z,sx,sy,sz,color=0x888888,transparent=false){
 
 function addPin(x,y,z){
   const visualRadius = 0.2;
-  const hitRadius = 0.145; // 見た目より少し小さい当たり判定
+  const hitRadius = 0.13;
   const height = 1.05;
 
   const mesh = new THREE.Mesh(
     new THREE.CylinderGeometry(visualRadius,visualRadius,height,32),
     new THREE.MeshStandardMaterial({color:0xffcc66})
   );
+
   mesh.rotation.x = Math.PI / 2;
   mesh.position.set(x,y,z);
   scene.add(mesh);
@@ -107,7 +116,6 @@ function addPin(x,y,z){
     RAPIER.RigidBodyDesc.fixed().setTranslation(x,y,z)
   );
 
-  // 円柱ではなく球体にして、正面から見た丸いピンの当たり判定にする
   world.createCollider(
     RAPIER.ColliderDesc.ball(hitRadius)
       .setRestitution(0)
@@ -117,11 +125,10 @@ function addPin(x,y,z){
 }
 
 function dropBall(){
-  const r = 0.13;
   const x = (Math.random() - 0.5) * 0.18;
 
   const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(r,20,20),
+    new THREE.SphereGeometry(ballRadius,16,16),
     new THREE.MeshStandardMaterial({color:0x66ccff})
   );
   mesh.position.set(x,13.5,0);
@@ -135,15 +142,33 @@ function dropBall(){
       .setAngularDamping(1.6)
   );
 
-  world.createCollider(
-    RAPIER.ColliderDesc.ball(r)
-      .setRestitution(0)
-      .setFriction(1)
-      .setDensity(0.7),
-    body
-  );
+  const collider = RAPIER.ColliderDesc.ball(ballRadius)
+    .setRestitution(0)
+    .setFriction(1)
+    .setDensity(0.7);
+
+  world.createCollider(collider, body);
 
   balls.push({mesh,body,counted:false});
+}
+
+function addStackBall(index){
+  const h = stacks[index];
+
+  const x = leftStart + index * binWidth + binWidth / 2;
+  const y = -1.45 - h * stackGap;
+  const z = 0;
+
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(ballRadius,16,16),
+    new THREE.MeshStandardMaterial({color:0x66ccff})
+  );
+
+  mesh.position.set(x,y,z);
+  scene.add(mesh);
+  stackedMeshes.push(mesh);
+
+  stacks[index]++;
 }
 
 function updateUI(){
@@ -198,23 +223,32 @@ function reset(){
     world.removeRigidBody(b.body);
   }
 
+  for(const m of stackedMeshes){
+    scene.remove(m);
+  }
+
   balls.length = 0;
+  stackedMeshes.length = 0;
+
   total = 0;
   binCounts.fill(0);
+  stacks.fill(0);
+
   updateUI();
 }
 
-document.getElementById("drop1").onclick = dropBall;
-
-document.getElementById("drop100").onclick = () => {
+function dropMany(num, interval){
   let n = 0;
   const timer = setInterval(()=>{
     dropBall();
     n++;
-    if(n>=100) clearInterval(timer);
-  },90);
-};
+    if(n >= num) clearInterval(timer);
+  }, interval);
+}
 
+document.getElementById("drop1").onclick = () => dropBall();
+document.getElementById("drop100").onclick = () => dropMany(100, 45);
+document.getElementById("drop1000").onclick = () => dropMany(1000, 8);
 document.getElementById("reset").onclick = reset;
 
 function animate(){
@@ -222,7 +256,9 @@ function animate(){
 
   world.step();
 
-  for(const b of balls){
+  for(let i=balls.length-1; i>=0; i--){
+    const b = balls[i];
+
     const v = b.body.linvel();
 
     b.body.setLinvel({
@@ -241,9 +277,17 @@ function animate(){
       const index = Math.floor((p.x - leftStart) / binWidth);
 
       if(index >= 0 && index < binCount){
+        b.counted = true;
+
+        scene.remove(b.mesh);
+        world.removeRigidBody(b.body);
+        balls.splice(i,1);
+
+        addStackBall(index);
+
         binCounts[index]++;
         total++;
-        b.counted = true;
+
         updateUI();
       }
     }
