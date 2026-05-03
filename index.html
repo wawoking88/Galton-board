@@ -16,7 +16,6 @@ button{padding:7px;margin:3px}
   <h3>ガルトンボード</h3>
 
   <div class="small">落とす位置</div>
-  
   <button id="posCenter">真ん中</button>
   <button id="posRandom">ランダム</button>
 
@@ -139,16 +138,8 @@ function addPin(x,y,z){
 }
 
 function getDropX(){
-  if(dropMode === "left"){
-    return -4.2 + (Math.random() - 0.5) * 0.25;
-  }
-
   if(dropMode === "center"){
     return 0 + (Math.random() - 0.5) * 0.25;
-  }
-
-  if(dropMode === "right"){
-    return 4.2 + (Math.random() - 0.5) * 0.25;
   }
 
   // ランダム：ボード全体の左右どこからでも
@@ -286,9 +277,7 @@ function dropMany(num, interval){
   }, interval);
 }
 
-document.getElementById("posLeft").onclick = () => setMode("left","左");
 document.getElementById("posCenter").onclick = () => setMode("center","真ん中");
-document.getElementById("posRight").onclick = () => setMode("right","右");
 document.getElementById("posRandom").onclick = () => setMode("random","ランダム");
 
 document.getElementById("drop1").onclick = () => dropBall();
